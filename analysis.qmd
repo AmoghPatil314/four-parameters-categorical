@@ -1,0 +1,62 @@
+---
+title: "Analysis"
+format: html
+execute:
+  echo: false
+---
+
+We have data about US voters in 1992, and we are trying to analyze it. We are not sure if representativeness holds. We are using a model from the brms package, using the categorical family, with the dependent variable being who was voted for. We modeled pres_vote, a character variable, as a multinomial logistic regression model. Women are most likely to support Clinton. A QOI is the probability of voting for a certain president, with a 95% confidence interval.
+
+```{r,warning=FALSE}
+#| label: setup
+#| message: FALSE
+library(primer.data)
+library(tidyverse)
+library(brms)
+library(tidybayes)
+library(gtsummary)
+```
+
+```{r}
+#| label: cleaning
+#| message: FALSE
+nes_92 <- nes |> 
+  filter(year == 1992) |> 
+  select(sex, pres_vote) |> 
+  drop_na() |> 
+  mutate(pres_vote = case_when(
+    pres_vote == "Democrat" ~ "Clinton",
+    pres_vote == "Republican" ~ "Bush",
+    pres_vote == "Third Party" ~ "Perot"
+  ))
+```
+
+```{r}
+#| label: model
+#| cache: true
+#| message: false
+fit_nes<-brm(formula = pres_vote ~ sex, data = nes_92, family = categorical(), silent = 2, refresh = 0, seed = 76)
+```
+
+```{r,warning=FALSE}
+#| label: table
+tbl_regression(fit_nes)
+```
+
+```{r,warning=FALSE}
+#| label: plot
+ndata<-tibble(sex = c("Female", "Male"))
+
+fit_nes|>
+  add_epred_draws(newdata=ndata)|>
+    select(sex,.category,.epred)|>
+      ggplot(aes(x = .epred, fill = sex))+
+      geom_histogram(bins=100)+
+      facet_grid(~ .category)+
+      scale_x_continuous(breaks=c(0.05, 0.3, 0.6),labels=scales::percent_format())+
+      labs(title="Posterior for Expected Probability of Candidate Support Among Women",
+           subtitle="Women are most likely to support Clinton",
+           fill="Sex",
+           y="Count",
+           x="Posterior Probability of Expected Vote Probability")
+```
